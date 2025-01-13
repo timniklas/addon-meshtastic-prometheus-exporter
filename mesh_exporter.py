@@ -36,9 +36,12 @@ def onDisconnected(interface, topic=pub.AUTO_TOPIC):
     print("disconnected")
 
 def onReceive(packet, interface):
-    print(f"Packet: {packet}")
+    metric_lastHeard.labels(num=packet['from']).set(time.time())
+    if 'hop_limit' in packet and 'hop_start' in packet:
+        metric_hopsAway.labels(num=packet['from']).set(packet['hop_start'] - packet['hop_limit'])
     match(packet['decoded']['portnum']):
         case 'TELEMETRY_APP':
+            print(f"GOT TELEMETRY:: {packet}")
             if 'deviceMetrics' in packet['decoded']:
                 if 'batteryLevel' in packet['decoded']['deviceMetrics']:
                     metric_batteryLevel.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['batteryLevel'])
@@ -49,6 +52,7 @@ def onReceive(packet, interface):
                 if 'airUtilTx' in packet['decoded']['deviceMetrics']:
                     metric_airUtilTx.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['airUtilTx'])
         case 'POSITION_APP':
+            print(f"GOT POSITION: {packet}")
             if 'latitudeI' in packet['decoded']['position']:
                 metric_pos_latitudeI.labels(num=packet['from']).set(packet['decoded']['position']['latitudeI'])
             if 'longitudeI' in packet['decoded']['position']:
@@ -57,6 +61,8 @@ def onReceive(packet, interface):
                 metric_pos_altitude.labels(num=packet['from']).set(packet['decoded']['position']['altitude'])
             if 'time' in packet['decoded']['position']:
                 metric_pos_time.labels(num=packet['from']).set(packet['decoded']['position']['time'])
+        case _:
+            print(f"UNKNOWN Packet: {packet}")
 
 def onUpdate(node, interface):
     print(f"Node: {node}")
