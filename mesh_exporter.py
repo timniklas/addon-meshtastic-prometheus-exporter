@@ -31,6 +31,9 @@ metric_airUtilTx = Gauge('airUtilTx', 'meshtastic device metrics', labels)
 
 def onReceive(node, interface):
     print(f"Received: {node}")
+    #strings are required
+    for key in node['user']:
+        node['user'][key] = str(node['user'][key])
     metric_user.labels(num=node['num']).info(node['user'])
     if 'snr' in node:
         metric_snr.labels(num=node['num']).set(node['snr'])
