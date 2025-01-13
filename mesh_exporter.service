@@ -10,7 +10,7 @@ StartLimitBurst=5
 Restart=on-failure
 RestartSec=5s
 
-ExecStart=/path/to/mesh_exporter.py localhost
+ExecStart=/usr/bin/python3 /path/to/mesh_exporter.py localhost
 
 [Install]
 WantedBy=multi-user.target
