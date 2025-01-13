@@ -29,8 +29,37 @@ metric_voltage = Gauge('meshtastic_voltage', 'meshtastic device metrics', labels
 metric_channelUtilization = Gauge('meshtastic_channelUtilization', 'meshtastic device metrics', labels)
 metric_airUtilTx = Gauge('meshtastic_airUtilTx', 'meshtastic device metrics', labels)
 
-def onReceive(node, interface):
-    print(f"Received: {node}")
+def onConnected(interface, topic=pub.AUTO_TOPIC):
+    print("connected")
+
+def onDisconnected(interface, topic=pub.AUTO_TOPIC):
+    print("disconnected")
+
+def onReceive(packet, interface):
+    print(f"Packet: {packet}")
+    match(packet['decoded']['portnum']):
+        case 'TELEMETRY_APP':
+            if 'deviceMetrics' in packet['decoded']:
+                if 'batteryLevel' in packet['decoded']['deviceMetrics']:
+                    metric_batteryLevel.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['batteryLevel'])
+                if 'voltage' in packet['decoded']['deviceMetrics']:
+                    metric_voltage.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['voltage'])
+                if 'channelUtilization' in packet['decoded']['deviceMetrics']:
+                    metric_channelUtilization.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['channelUtilization'])
+                if 'airUtilTx' in packet['decoded']['deviceMetrics']:
+                    metric_airUtilTx.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['airUtilTx'])
+        case 'POSITION_APP':
+            if 'latitudeI' in packet['decoded']['position']:
+                metric_pos_latitudeI.labels(num=packet['from']).set(packet['decoded']['position']['latitudeI'])
+            if 'longitudeI' in packet['decoded']['position']:
+                metric_pos_longitudeI.labels(num=packet['from']).set(packet['decoded']['position']['longitudeI'])
+            if 'altitude' in packet['decoded']['position']:
+                metric_pos_altitude.labels(num=packet['from']).set(packet['decoded']['position']['altitude'])
+            if 'time' in packet['decoded']['position']:
+                metric_pos_time.labels(num=packet['from']).set(packet['decoded']['position']['time'])
+
+def onUpdate(node, interface):
+    print(f"Node: {node}")
     #strings are required
     for key in node['user']:
         node['user'][key] = str(node['user'][key])
@@ -62,7 +91,10 @@ def onReceive(node, interface):
         if 'airUtilTx' in node['deviceMetrics']:
             metric_airUtilTx.labels(num=node['num']).set(node['deviceMetrics']['airUtilTx'])
 
-pub.subscribe(onReceive, "meshtastic.node.updated")
+pub.subscribe(onConnected, "meshtastic.connection.established")
+pub.subscribe(onDisconnected, "meshtastic.connection.lost")
+pub.subscribe(onUpdate, "meshtastic.node.updated")
+pub.subscribe(onReceive, "meshtastic.receive")
 start_http_server(8000)
 try:
     iface = meshtastic.tcp_interface.TCPInterface(hostname=sys.argv[1])
