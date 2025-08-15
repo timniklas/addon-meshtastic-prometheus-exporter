@@ -10,7 +10,7 @@ ENV USER=root
 RUN apt-get update
 
 # Install packages
-RUN apt-get install -y python python-pip 
+RUN apt-get install -y python3 python3-pip 
 RUN python3 -m venv /app
 RUN /app/bin/pip install meshtastic prometheus_client
 
