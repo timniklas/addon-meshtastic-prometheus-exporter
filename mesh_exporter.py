@@ -2,7 +2,7 @@ import sys
 import time
 
 from pubsub import pub
-from prometheus_client import start_http_server, Gauge, Info
+from prometheus_client import start_http_server, Gauge, Info, Counter
 
 import meshtastic
 import meshtastic.tcp_interface
@@ -14,57 +14,40 @@ if len(sys.argv) < 2:
 
 labels = ['num']
 metric_user = Info('meshtastic_user', 'meshtastic device info', labels)
-metric_uptimeSeconds = Gauge('meshtastic_uptimeSeconds', 'meshtastic device metrics', labels)
 metric_snr = Gauge('meshtastic_snr', 'meshtastic device metrics', labels)
 metric_hopsAway = Gauge('meshtastic_hopsAway', 'meshtastic device metrics', labels)
 metric_lastHeard = Gauge('meshtastic_lastHeard', 'meshtastic device metrics', labels)
+metric_hopLimit = Gauge('meshtastic_hopLimit', 'meshtastic device metrics', labels)
+metric_hopStart = Gauge('meshtastic_hopStart', 'meshtastic device metrics', labels)
+metric_relayNode = Gauge('meshtastic_relayNode', 'meshtastic device metrics', labels)
+metric_rxRssi = Gauge('meshtastic_rxRssi', 'meshtastic device metrics', labels)
 #position (optional)
-metric_pos_latitudeI = Gauge('meshtastic_pos_latitudeI', 'meshtastic device metrics', labels)
-metric_pos_longitudeI = Gauge('meshtastic_pos_longitudeI', 'meshtastic device metrics', labels)
+metric_pos_latitude = Gauge('meshtastic_pos_latitude', 'meshtastic device metrics', labels)
+metric_pos_longitude = Gauge('meshtastic_pos_longitude', 'meshtastic device metrics', labels)
 metric_pos_altitude = Gauge('meshtastic_pos_altitude', 'meshtastic device metrics', labels)
 metric_pos_time = Gauge('meshtastic_pos_time', 'meshtastic device metrics', labels)
-#metrics (optional)
+#device metrics (optional)
 metric_batteryLevel = Gauge('meshtastic_batteryLevel', 'meshtastic device metrics', labels)
 metric_voltage = Gauge('meshtastic_voltage', 'meshtastic device metrics', labels)
 metric_channelUtilization = Gauge('meshtastic_channelUtilization', 'meshtastic device metrics', labels)
 metric_airUtilTx = Gauge('meshtastic_airUtilTx', 'meshtastic device metrics', labels)
+metric_uptimeSeconds = Gauge('meshtastic_uptimeSeconds', 'meshtastic device metrics', labels)
+#enviroment metrics (optional)
+metric_temperature = Gauge('meshtastic_temperature', 'meshtastic enviroment metrics', labels)
+metric_barometricPressure = Gauge('meshtastic_barometricPressure', 'meshtastic enviroment metrics', labels)
+metric_relativeHumidity = Gauge('meshtastic_relativeHumidity', 'meshtastic enviroment metrics', labels)
 
 def onConnected(interface, topic=pub.AUTO_TOPIC):
     print("connected")
 
-def onDisconnected(interface, topic=pub.AUTO_TOPIC):
-    print("disconnected")
+def on_any_packet(packet, interface):
+    sender_num = packet.get("from")
+    print(packet.get("portnum"))
+    node = interface.nodesByNum.get(sender_num)
+    if isinstance(node, dict):
+        onNodeUpdate(node, interface)
 
-def onReceive(packet, interface):
-    metric_lastHeard.labels(num=packet['from']).set(time.time())
-    if 'hop_limit' in packet and 'hop_start' in packet:
-        metric_hopsAway.labels(num=packet['from']).set(packet['hop_start'] - packet['hop_limit'])
-    match(packet['decoded']['portnum']):
-        case 'TELEMETRY_APP':
-            print(f"GOT TELEMETRY:: {packet}")
-            if 'deviceMetrics' in packet['decoded']:
-                if 'batteryLevel' in packet['decoded']['deviceMetrics']:
-                    metric_batteryLevel.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['batteryLevel'])
-                if 'voltage' in packet['decoded']['deviceMetrics']:
-                    metric_voltage.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['voltage'])
-                if 'channelUtilization' in packet['decoded']['deviceMetrics']:
-                    metric_channelUtilization.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['channelUtilization'])
-                if 'airUtilTx' in packet['decoded']['deviceMetrics']:
-                    metric_airUtilTx.labels(num=packet['from']).set(packet['decoded']['deviceMetrics']['airUtilTx'])
-        case 'POSITION_APP':
-            print(f"GOT POSITION: {packet}")
-            if 'latitudeI' in packet['decoded']['position']:
-                metric_pos_latitudeI.labels(num=packet['from']).set(packet['decoded']['position']['latitudeI'])
-            if 'longitudeI' in packet['decoded']['position']:
-                metric_pos_longitudeI.labels(num=packet['from']).set(packet['decoded']['position']['longitudeI'])
-            if 'altitude' in packet['decoded']['position']:
-                metric_pos_altitude.labels(num=packet['from']).set(packet['decoded']['position']['altitude'])
-            if 'time' in packet['decoded']['position']:
-                metric_pos_time.labels(num=packet['from']).set(packet['decoded']['position']['time'])
-        case _:
-            print(f"UNKNOWN Packet: {packet}")
-
-def onUpdate(node, interface):
+def onNodeUpdate(node, interface):
     print(f"Node: {node}")
     #strings are required
     for key in node['user']:
@@ -76,17 +59,25 @@ def onUpdate(node, interface):
         metric_hopsAway.labels(num=node['num']).set(node['hopsAway'])
     if 'lastHeard' in node:
         metric_lastHeard.labels(num=node['num']).set(node['lastHeard'])
+    if 'hopLimit' in node:
+        metric_hopLimit.labels(num=node['num']).set(node['hopLimit'])
+    if 'hopStart' in node:
+        metric_hopStart.labels(num=node['num']).set(node['hopStart'])
+    if 'relayNode' in node:
+        metric_relayNode.labels(num=node['num']).set(node['relayNode'])
+    if 'rxRssi' in node:
+        metric_rxRssi.labels(num=node['num']).set(node['rxRssi'])
     #position (optional)
     if 'position' in node:
-        if 'latitudeI' in node['position']:
-            metric_pos_latitudeI.labels(num=node['num']).set(node['position']['latitudeI'])
-        if 'longitudeI' in node['position']:
-            metric_pos_longitudeI.labels(num=node['num']).set(node['position']['longitudeI'])
+        if 'latitude' in node['position']:
+            metric_pos_latitude.labels(num=node['num']).set(node['position']['latitude'])
+        if 'longitude' in node['position']:
+            metric_pos_longitude.labels(num=node['num']).set(node['position']['longitude'])
         if 'altitude' in node['position']:
             metric_pos_altitude.labels(num=node['num']).set(node['position']['altitude'])
         if 'time' in node['position']:
             metric_pos_time.labels(num=node['num']).set(node['position']['time'])
-    #metrics (optional)
+    #device metrics (optional)
     if 'deviceMetrics' in node:
         if 'batteryLevel' in node['deviceMetrics']:
             metric_batteryLevel.labels(num=node['num']).set(node['deviceMetrics']['batteryLevel'])
@@ -96,11 +87,20 @@ def onUpdate(node, interface):
             metric_channelUtilization.labels(num=node['num']).set(node['deviceMetrics']['channelUtilization'])
         if 'airUtilTx' in node['deviceMetrics']:
             metric_airUtilTx.labels(num=node['num']).set(node['deviceMetrics']['airUtilTx'])
+        if 'uptimeSeconds' in node['deviceMetrics']:
+            metric_uptimeSeconds.labels(num=node['num']).set(node['deviceMetrics']['uptimeSeconds'])
+    #enviroment metrics (optional)
+    if 'environmentMetrics' in node:
+        if 'temperature' in node['environmentMetrics']:
+            metric_temperature.labels(num=node['num']).set(node['environmentMetrics']['temperature'])
+        if 'barometricPressure' in node['environmentMetrics']:
+            metric_barometricPressure.labels(num=node['num']).set(node['environmentMetrics']['barometricPressure'])
+        if 'relativeHumidity' in node['environmentMetrics']:
+            metric_relativeHumidity.labels(num=node['num']).set(node['environmentMetrics']['relativeHumidity'])
 
 pub.subscribe(onConnected, "meshtastic.connection.established")
-pub.subscribe(onDisconnected, "meshtastic.connection.lost")
-pub.subscribe(onUpdate, "meshtastic.node.updated")
-pub.subscribe(onReceive, "meshtastic.receive")
+pub.subscribe(onNodeUpdate, "meshtastic.node.updated")
+pub.subscribe(on_any_packet, "meshtastic.receive")
 start_http_server(8000)
 try:
     iface = meshtastic.tcp_interface.TCPInterface(hostname=sys.argv[1])
